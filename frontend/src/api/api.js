@@ -5,7 +5,7 @@ const baseURL = (API_BASE_URL || '/api').replace(/\/+$/g, '');
 
 const apiClient = axios.create({
   baseURL,
-  timeout: 30000,
+  timeout: 0,
   headers: {
     Accept: 'application/json',
   },

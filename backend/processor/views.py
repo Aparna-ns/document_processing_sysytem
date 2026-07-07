@@ -19,74 +19,91 @@ from django.http import FileResponse
 from .models import SplitDocument
 
 
+from pathlib import Path
+import os
+import fitz
+
 class UploadPDFView(APIView):
 
     def post(self, request):
 
         serializer = UploadedPDFSerializer(data=request.data)
 
-        if serializer.is_valid():
-
-            # Save uploaded PDF
-            pdf = serializer.save()
-
-            pdf_path = pdf.file.path
-
-            # Folder for page images
-            image_folder = os.path.join(
-                "media",
-                "images",
-                str(pdf.id)
+        if not serializer.is_valid():
+            return Response(
+                serializer.errors,
+                status=status.HTTP_400_BAD_REQUEST
             )
 
-            image_paths = pdf_to_images(
-                pdf_path,
-                image_folder
-            )
+        pdf = serializer.save()
+        pdf_path = pdf.file.path
 
-            pages = []
+        image_folder = os.path.join("media", "images", str(pdf.id))
+        os.makedirs(image_folder, exist_ok=True)
 
-            # OCR every page
-            for index, image in enumerate(image_paths):
+        pages = []
 
-                text = image_to_text(image)
+        document = fitz.open(pdf_path)
 
+        try:
+            for page_number in range(len(document)):
+
+                page = document.load_page(page_number)
+
+                # Reduced DPI to lower memory usage
+                pix = page.get_pixmap(dpi=150)
+
+                image_path = os.path.join(
+                    image_folder,
+                    f"page_{page_number + 1}.png"
+                )
+
+                pix.save(image_path)
+
+                # OCR
+                text = image_to_text(image_path)
+
+                # Classification
                 result = classify_page(text)
 
                 pages.append({
-                    "page": index + 1,
+                    "page": page_number + 1,
                     **result
                 })
 
-            # Split PDF
-            output_folder = os.path.join(
-                "media",
-                "output",
-                str(pdf.id)
-            )
+                # Delete temporary image immediately
+                if os.path.exists(image_path):
+                    os.remove(image_path)
 
-            split_documents = split_pdf(
-                uploaded_pdf=pdf,
-                pdf_path=pdf_path,
-                pages_info=pages,
-                output_folder=output_folder
-            )
+                # Release memory
+                del pix
+                del page
 
-            # Serialize split documents
-            document_serializer = SplitDocumentSerializer(
-                split_documents,
-                many=True
-            )
+        finally:
+            document.close()
 
-            return Response({
-                "pages": pages,
-                "documents": document_serializer.data
-            })
-
-        return Response(
-            serializer.errors,
-            status=status.HTTP_400_BAD_REQUEST
+        output_folder = os.path.join(
+            "media",
+            "output",
+            str(pdf.id)
         )
+
+        split_documents = split_pdf(
+            uploaded_pdf=pdf,
+            pdf_path=pdf_path,
+            pages_info=pages,
+            output_folder=output_folder
+        )
+
+        document_serializer = SplitDocumentSerializer(
+            split_documents,
+            many=True
+        )
+
+        return Response({
+            "pages": pages,
+            "documents": document_serializer.data
+        })
 class SplitDocumentListView(APIView):
 
     def get(self, request):

@@ -77,7 +77,14 @@ function UploadCard({ file, onFileChange, onUpload, disabled, isProcessing, clea
             disabled={!file || isProcessing}
             onClick={onUpload}
           >
-            Upload & Process
+             {isProcessing ? (
+              <>
+                <span className="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                Processing PDF...
+              </>
+            ) : (
+              'Upload & Process'
+            )}
           </button>
         </div>
       </div>

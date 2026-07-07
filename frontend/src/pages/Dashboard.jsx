@@ -5,13 +5,15 @@ import ProcessingLoader from '../components/ProcessingLoader.jsx';
 import DocumentTable from '../components/DocumentTable.jsx';
 import ErrorAlert from '../components/ErrorAlert.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import UploadSummary from '../components/UploadSummary.jsx';
 import useUpload from '../hooks/useUpload.js';
-import { downloadDocument } from '../services/api.js';
+import { downloadDocument, getDownloadErrorMessage } from '../services/uploadService.js';
 
 function Dashboard() {
   const {
     file,
     documents,
+    pagesProcessed,
     isProcessing,
     error,
     successMessage,
@@ -41,11 +43,7 @@ function Dashboard() {
       window.URL.revokeObjectURL(url);
       setDownloadMessage('Download started successfully.');
     } catch (downloadError) {
-      if (downloadError.response) {
-        setError('Unable to connect to server.');
-      } else {
-        setError('Unable to connect to server.');
-      }
+      setError(getDownloadErrorMessage(downloadError));
     }
   };
 
@@ -93,11 +91,7 @@ function Dashboard() {
           <div className="mt-4 status-panel p-3 rounded-4 shadow-sm">
             <ProcessingLoader isProcessing={isProcessing} />
             <ErrorAlert message={error} />
-            {successMessage && (
-              <div className="alert alert-success rounded-4 shadow-sm" role="alert">
-                {successMessage}
-              </div>
-            )}
+            {successMessage && <UploadSummary pages={pagesProcessed} documentsCount={documents.length} />}
             {downloadMessage && (
               <div className="alert alert-success rounded-4 shadow-sm" role="alert">
                 {downloadMessage}

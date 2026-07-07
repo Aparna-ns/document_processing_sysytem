@@ -1,9 +1,10 @@
 import { useState, useCallback } from 'react';
-import { uploadDocument } from '../services/api.js';
+import { uploadDocument, getUploadErrorMessage } from '../services/uploadService.js';
 
 export default function useUpload() {
   const [file, setFile] = useState(null);
   const [documents, setDocuments] = useState([]);
+  const [pagesProcessed, setPagesProcessed] = useState(0);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState(null);
   const [successMessage, setSuccessMessage] = useState('');
@@ -11,6 +12,7 @@ export default function useUpload() {
   const handleFileSelect = useCallback((selectedFile) => {
     setError(null);
     setSuccessMessage('');
+    setPagesProcessed(0);
     setFile(selectedFile);
   }, []);
 
@@ -20,7 +22,7 @@ export default function useUpload() {
   }, []);
 
   const upload = useCallback(async () => {
-    if (!file) {
+    if (!file || isProcessing) {
       return;
     }
 
@@ -31,21 +33,21 @@ export default function useUpload() {
     try {
       const data = await uploadDocument(file);
       setDocuments(data.documents || []);
+      setPagesProcessed(data.pages ? data.pages.length : 0);
+      setSuccessMessage('Upload successful.');
     } catch (uploadError) {
-      if (uploadError.response) {
-        setError('Upload failed.');
-      } else {
-        setError('Unable to connect to server.');
-      }
+      setError(getUploadErrorMessage(uploadError));
       setDocuments([]);
+      setPagesProcessed(0);
     } finally {
       setIsProcessing(false);
     }
-  }, [file]);
+  }, [file, isProcessing]);
 
   return {
     file,
     documents,
+    pagesProcessed,
     isProcessing,
     error,
     successMessage,

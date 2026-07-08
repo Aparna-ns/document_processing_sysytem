@@ -55,6 +55,8 @@ class UploadPDFView(APIView):
 
                     page = document.load_page(page_number)
                     text = page.get_text().strip()
+                    image_path = None
+                    pix = None
 
                     if not text:
                         pix = page.get_pixmap(dpi=96)
@@ -68,6 +70,9 @@ class UploadPDFView(APIView):
 
                         logger.info("Running OCR")
                         text = image_to_text(image_path)
+
+                        os.remove(image_path)
+                        del pix
 
                     logger.info("Classifying")
                     result = classify_page(text)

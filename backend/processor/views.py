@@ -54,17 +54,20 @@ class UploadPDFView(APIView):
                     logger.info(f"Processing page {page_number + 1}")
 
                     page = document.load_page(page_number)
-                    pix = page.get_pixmap(dpi=150)
+                    text = page.get_text().strip()
 
-                    image_path = os.path.join(
-                        image_folder,
-                        f"page_{page_number + 1}.png"
-                    )
+                    if not text:
+                        pix = page.get_pixmap(dpi=96)
 
-                    pix.save(image_path)
+                        image_path = os.path.join(
+                            image_folder,
+                            f"page_{page_number + 1}.png"
+                        )
 
-                    logger.info("Running OCR")
-                    text = image_to_text(image_path)
+                        pix.save(image_path)
+
+                        logger.info("Running OCR")
+                        text = image_to_text(image_path)
 
                     logger.info("Classifying")
                     result = classify_page(text)

@@ -23,87 +23,86 @@ from pathlib import Path
 import os
 import fitz
 
+import traceback
+import logging
+
+logger = logging.getLogger(__name__)
+
 class UploadPDFView(APIView):
 
     def post(self, request):
-
-        serializer = UploadedPDFSerializer(data=request.data)
-
-        if not serializer.is_valid():
-            return Response(
-                serializer.errors,
-                status=status.HTTP_400_BAD_REQUEST
-            )
-
-        pdf = serializer.save()
-        pdf_path = pdf.file.path
-
-        image_folder = os.path.join("media", "images", str(pdf.id))
-        os.makedirs(image_folder, exist_ok=True)
-
-        pages = []
-
-        document = fitz.open(pdf_path)
-
         try:
-            for page_number in range(len(document)):
+            serializer = UploadedPDFSerializer(data=request.data)
 
-                page = document.load_page(page_number)
+            if not serializer.is_valid():
+                return Response(serializer.errors, status=400)
 
-                # Reduced DPI to lower memory usage
-                pix = page.get_pixmap(dpi=150)
+            pdf = serializer.save()
+            pdf_path = pdf.file.path
 
-                image_path = os.path.join(
-                    image_folder,
-                    f"page_{page_number + 1}.png"
-                )
+            logger.info(f"PDF saved: {pdf_path}")
 
-                pix.save(image_path)
+            image_folder = os.path.join("media", "images", str(pdf.id))
+            os.makedirs(image_folder, exist_ok=True)
 
-                # OCR
-                text = image_to_text(image_path)
+            pages = []
 
-                # Classification
-                result = classify_page(text)
+            document = fitz.open(pdf_path)
 
-                pages.append({
-                    "page": page_number + 1,
-                    **result
-                })
+            try:
+                for page_number in range(len(document)):
+                    logger.info(f"Processing page {page_number + 1}")
 
-                # Delete temporary image immediately
-                if os.path.exists(image_path):
+                    page = document.load_page(page_number)
+                    pix = page.get_pixmap(dpi=150)
+
+                    image_path = os.path.join(
+                        image_folder,
+                        f"page_{page_number + 1}.png"
+                    )
+
+                    pix.save(image_path)
+
+                    logger.info("Running OCR")
+                    text = image_to_text(image_path)
+
+                    logger.info("Classifying")
+                    result = classify_page(text)
+
+                    pages.append({
+                        "page": page_number + 1,
+                        **result
+                    })
+
                     os.remove(image_path)
 
-                # Release memory
-                del pix
-                del page
+                    del pix
+                    del page
 
-        finally:
-            document.close()
+            finally:
+                document.close()
 
-        output_folder = os.path.join(
-            "media",
-            "output",
-            str(pdf.id)
-        )
+            logger.info("Splitting PDF")
 
-        split_documents = split_pdf(
-            uploaded_pdf=pdf,
-            pdf_path=pdf_path,
-            pages_info=pages,
-            output_folder=output_folder
-        )
+            output_folder = os.path.join("media", "output", str(pdf.id))
 
-        document_serializer = SplitDocumentSerializer(
-            split_documents,
-            many=True
-        )
+            split_documents = split_pdf(
+                uploaded_pdf=pdf,
+                pdf_path=pdf_path,
+                pages_info=pages,
+                output_folder=output_folder
+            )
 
-        return Response({
-            "pages": pages,
-            "documents": document_serializer.data
-        })
+            serializer = SplitDocumentSerializer(split_documents, many=True)
+
+            return Response({
+                "pages": pages,
+                "documents": serializer.data
+            })
+
+        except Exception:
+            logger.exception("Upload failed")
+            return Response({"error": traceback.format_exc()}, status=500)
 class SplitDocumentListView(APIView):
 
     def get(self, request):

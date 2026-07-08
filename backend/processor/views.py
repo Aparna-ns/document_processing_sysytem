@@ -1,3 +1,4 @@
+import gc
 import os
 
 from rest_framework.views import APIView
@@ -82,10 +83,12 @@ class UploadPDFView(APIView):
                         **result
                     })
 
-                    os.remove(image_path)
+                    if image_path and os.path.exists(image_path):
+                        os.remove(image_path)
 
                     del pix
                     del page
+                    gc.collect()
 
             finally:
                 document.close()
